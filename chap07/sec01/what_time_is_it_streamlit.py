@@ -1,4 +1,4 @@
-from gpt_functions import get_current_time, tools, get_yf_stock_info
+from gpt_functions import get_current_time, tools, get_yf_stock_info, get_yf_stock_history, get_yf_stock_recommendations
 
 from google import genai
 from dotenv import load_dotenv
@@ -23,7 +23,7 @@ if "chat" not in st.session_state:
         model="gemini-3.1-flash-lite",
         config=types.GenerateContentConfig(
             system_instruction="너는 사용자를 도와주는 상담사야.",
-            tools=[get_current_time, get_yf_stock_info],
+            tools=[get_current_time, get_yf_stock_info, get_yf_stock_history, get_yf_stock_recommendations],
         ),
     )
 
@@ -55,18 +55,25 @@ if user_input := st.chat_input("메시지를 입력하세요 (예: 뉴욕 지금
 
                 # 함수 호출 디버깅 로그 출력 (화면 캡션 형식)
                 history = st.session_state.chat.get_history()
-                function_called = False
-                for content in reversed(history):
-                    if content.role == "model" and content.parts:
-                        for part in content.parts:
+                # 최근 추가된 메시지들 중에서 model의 function_call을 찾아 출력합니다.
+                for message in reversed(history):
+                    # 사용자의 실제 텍스트 질문(function_response가 아닌 일반 텍스트 입력)을 만나면 탐색을 중단합니다.
+                    if message.role == "user":
+                        has_text = False
+                        if message.parts:
+                            for part in message.parts:
+                                if part.text:
+                                    has_text = True
+                                    break
+                        if has_text:
+                            break
+                    
+                    if message.role == "model" and message.parts:
+                        for part in message.parts:
                             if part.function_call:
                                 st.caption(
                                     f"🔧 **실행된 도구**: `{part.function_call.name}` (인자: `{part.function_call.args}`)"
                                 )
-                                function_called = True
-                                break
-                    if function_called:
-                        break
 
                 # 최종 답변 텍스트 출력
                 st.markdown(response.text)
