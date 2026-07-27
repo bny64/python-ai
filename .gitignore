@@ -3,3 +3,4 @@ venv/
 *.csv
 *.mp3
 *.pyc
+*/**/chroma_store
