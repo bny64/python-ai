@@ -108,7 +108,11 @@ def get_ai_response(messages):
             tool_msg = selected_tool.invoke(tool_call)
             print(tool_msg, type(tool_msg))
             st.session_state.messages.append(tool_msg)
+            # 실행된 도구의 결과를 화면(assistant/tool 영역)에 즉시 표시
+            with st.chat_message("tool"):
+                st.write(get_text_content(tool_msg.content))
 
+        # 도구 실행 결과가 포함된 상태로 다시 LLM 응답을 받아와 스트리밍
         for chunk in get_ai_response(st.session_state.messages):
             yield chunk
 
@@ -143,7 +147,12 @@ if prompt := st.chat_input():
     st.chat_message("user").write(prompt)  # 사용자 메시지 출력
     st.session_state.messages.append(HumanMessage(prompt))  # 사용자 메시지 저장
 
-    response = get_ai_response(st.session_state["messages"])
+    with st.chat_message("assistant"):
+        response = get_ai_response(st.session_state["messages"])
+        result = st.write_stream(response)  # AI 메시지 출력
+    
+    # 마지막으로 렌더링된 최종 텍스트가 있다면 session_state에 추가 (중복 방지 체크)
+    final_text = get_text_content(result)
+    if final_text.strip() and not isinstance(st.session_state["messages"][-1], AIMessage):
+        st.session_state["messages"].append(AIMessage(final_text))
 
-    result = st.chat_message("assistant").write_stream(response)  # AI 메시지 출력
-    st.session_state["messages"].append(AIMessage(get_text_content(result)))  # AI 메시지 저장
