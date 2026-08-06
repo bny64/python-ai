@@ -18,6 +18,9 @@ import pytz
 
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
+from youtube_search import YoutubeSearch
+from langchain_community.document_loaders import YoutubeLoader
+from typing import List
 
 # 모델 초기화
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", api_key=api_key)
@@ -63,9 +66,44 @@ def get_web_search(query: str, search_period: str) -> str:
     return docs
 
 
+@tool
+def get_youtube_search(query: str) -> List:
+    """
+    유튜브 검색을 한 뒤, 영상들의 내용을 반환하는 함수.
+
+    Args:
+        query (str): 검색어
+
+    Returns:
+        List: 검색 결과
+    """
+    print("-----Youtube search-----")
+    print(query)
+
+    vedios = YoutubeSearch(query, max_resuls=5).to_dict()
+
+    vedios = [video for video in videos if len(vedio["duration"]) <= 5]
+
+    for videos in videos:
+        video_url = "https://youtube.com" + vedio["url_suffix"]
+
+        loader = YoutubeLoader.from_youtube_url(
+            video_url, language=["ko", "en"]  # 자막 언어
+        )
+
+        video["video_url"] = video_url
+        video["content"] = loader.load()
+
+    return videos
+
+
 # 도구 바인딩
-tools = [get_current_time, get_web_search]
-tool_dict = {"get_current_time": get_current_time, "get_web_search": get_web_search}
+tools = [get_current_time, get_web_search, get_youtube_search]
+tool_dict = {
+    "get_current_time": get_current_time,
+    "get_web_search": get_web_search,
+    "get_youtube_search": get_youtube_search,
+}
 
 llm_with_tools = llm.bind_tools(tools)
 
@@ -150,9 +188,10 @@ if prompt := st.chat_input():
     with st.chat_message("assistant"):
         response = get_ai_response(st.session_state["messages"])
         result = st.write_stream(response)  # AI 메시지 출력
-    
+
     # 마지막으로 렌더링된 최종 텍스트가 있다면 session_state에 추가 (중복 방지 체크)
     final_text = get_text_content(result)
-    if final_text.strip() and not isinstance(st.session_state["messages"][-1], AIMessage):
+    if final_text.strip() and not isinstance(
+        st.session_state["messages"][-1], AIMessage
+    ):
         st.session_state["messages"].append(AIMessage(final_text))
-
