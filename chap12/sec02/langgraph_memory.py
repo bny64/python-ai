@@ -5,8 +5,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 load_dotenv()
 # 모델 초기화
 model = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite",
-    google_api_key=os.getenv("GEMINI_API_KEY")
+    model="gemini-3.1-flash-lite", google_api_key=os.getenv("GEMINI_API_KEY")
 )
 
 from typing import Annotated
@@ -34,6 +33,7 @@ graph_builder = StateGraph(State)
 
 # ------------
 
+
 def generate(state: State):
     """
     주어진 상태를 기반으로 챗봇의 응답 메시지를 생성합니다.
@@ -53,18 +53,26 @@ graph_builder.add_node("generate", generate)
 graph_builder.add_edge(START, "generate")
 graph_builder.add_edge("generate", END)
 
-graph = graph_builder.compile()
+from langgraph.checkpoint.memory import MemorySaver
 
-#--------------------
+memory = MemorySaver()
+
+config = {"configurable": {"thread_id": "abcd"}}
+
+graph = graph_builder.compile(checkpointer=memory)
+
+# --------------------
 from langchain_core.messages import HumanMessage
 
 while True:
-  user_input = input("User:")
-  
-  if user_input in ['exit', 'quit', 'q']:
-    break
+    user_input = input("User:")
 
-  for event in graph.stream({'messages': [HumanMessage(user_input)]}, stream_mode="values"):
-    event['messages'][-1].pretty_print()
+    if user_input in ["exit", "quit", "q"]:
+        break
 
-    print(f'\n현재 메시지 개수: {len(event["messages"])}\n--------------------\n')
+    for event in graph.stream(
+        {"messages": [HumanMessage(user_input)]}, config, stream_mode="values"
+    ):
+        event["messages"][-1].pretty_print()
+
+        print(f'\n현재 메시지 개수: {len(event["messages"])}\n--------------------\n')
