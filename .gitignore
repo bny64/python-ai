@@ -3,4 +3,4 @@ venv/
 *.csv
 *.mp3
 *.pyc
-*/**/chroma_store
+chap09/chroma_store
