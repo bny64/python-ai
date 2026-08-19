@@ -69,7 +69,9 @@ def content_strategist(state: State):
 
     # 파이프(|)를 이용하여 LangChain 체인 구성
     content_strategist_chain = (
-        content_strategist_system_prompt | llm | StrOutputParser()
+        content_strategist_system_prompt
+        | llm
+        | StrOutputParser()  # StrOutputParser는 content 부분만 추출해주도록 함
     )
 
     messages = state["messages"]  # 상태에서 메시지 가져오기
@@ -213,23 +215,6 @@ state = State(
 
 # 터미널 창에서 사용자의 입력을 받고 graph를 실행(invoke)하는 부분
 
-# while True:
-
-#     user_input = input("\nUser\t: ").strip()
-
-#     if user_input.lower() in ["exit", "quit", "q"]:
-
-#         print("GoodBye!")
-
-#         break
-
-#     state["messages"].append(HumanMessage(user_input))
-
-#     state = graph.invoke(state)
-
-
-# 터미널 창에서 사용자의 입력을 받고 graph를 실행(invoke)하는 부분
-
 while True:
     user_input = input("\nUser\t: ").strip()
 
@@ -239,7 +224,12 @@ while True:
 
         break
 
+    print(state["messages"])
+
     state["messages"].append(HumanMessage(user_input))
+
+    print(state["messages"])
+
     state = graph.invoke(state)
 
     print(
