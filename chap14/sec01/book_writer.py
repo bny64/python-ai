@@ -1,28 +1,13 @@
 from langgraph.graph import StateGraph, END, START
-
-
 from langchain_google_genai import ChatGoogleGenerativeAI
-
-
-from langchain_core.messages import HumanMessage, SystemMessage, AnyMessage
-
-
+from langchain_core.messages import HumanMessage, SystemMessage, AnyMessage, AIMessage
 from langchain_core.prompts import PromptTemplate
-
-
+from langchain_core.output_parsers.string import StrOutputParser
 from typing_extensions import TypedDict
-
-
 from typing import List
-
-
-from utils import save_state
-
-
+from utils import save_state, get_outline, save_outline
 from datetime import datetime
 import os
-
-
 import dotenv
 
 
@@ -63,6 +48,51 @@ class State(TypedDict):
     messages: List[AnyMessage | str]
 
 
+def content_strategist(state: State):
+    print("\n============ CONTENT STRATEGIST ============")
+
+    # 시스템 프롬프트 정의. 지난 목차(outline)와 이전 대화 내용(messages)이 주어지면 이전 대화 내용을
+    # 바탕으로 새로운 목차를 생성하라는 문구를 추가합니다.
+    content_strategist_system_prompt = PromptTemplate.from_template(
+        """\
+    너는 책을 쓰는 AI 팀의 콘텐츠 전략가(Content Strategist)로서,
+    이전 대화 내용을 바탕으로 사용자의 요구 사항을 분석하고, AI팀이 쓸 책의 세부 목차를 결정한다.
+
+    지난 목차가 있다면 그 버전을 사용자의 요구에 맞게 수정하고, 없다면 새로운 목차를 제안한다.
+
+    -------------------------------
+    - 지난 목차: {outline}
+    -------------------------------
+    - 이전 대화 내용: {messages}
+    """
+    )
+
+    # 파이프(|)를 이용하여 LangChain 체인 구성
+    content_strategist_chain = (
+        content_strategist_system_prompt | llm | StrOutputParser()
+    )
+
+    messages = state["messages"]  # 상태에서 메시지 가져오기
+    outline = get_outline(current_path)
+
+    inputs = {"messages": messages, "outline": outline}
+
+    gathered = ""
+    for chunk in content_strategist_chain.stream(inputs):
+        gathered += chunk
+        print(chunk, end="")
+
+    print()
+
+    save_outline(current_path, gathered)
+
+    content_strategist_message = f"[Content Strategist] 목차 작성 완료"
+    print(content_strategist_message)
+    messages.append(AIMessage(content_strategist_message))
+
+    return {"messages": messages}
+
+
 # 사용자와 대화할 노드(agent): communicator
 
 
@@ -79,7 +109,7 @@ def communicator(state: State):
 
     AI 팀의 진행상황을 사용자에게 보고하고, 사용자의 의견을 파악하기 위해 대화를 나눈다.
 
-
+    사용자도 outline(목차)을 이미 보고 있으므로, 다시 출력할 필요는 없다.
 
     messages: {messages}
     """
@@ -130,14 +160,14 @@ graph_builder = StateGraph(State)
 
 
 graph_builder.add_node("communicator", communicator)
+graph_builder.add_node("content_strategist", content_strategist)
 
 
 # 간선(Edge) 추가
 
 
-graph_builder.add_edge(START, "communicator")
-
-
+graph_builder.add_edge(START, "content_strategist")
+graph_builder.add_edge("content_strategist", "communicator")
 graph_builder.add_edge("communicator", END)
 
 

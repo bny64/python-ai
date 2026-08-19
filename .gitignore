@@ -4,3 +4,5 @@ venv/
 *.mp3
 *.pyc
 chap09/chroma_store
+*.json
+*.md
