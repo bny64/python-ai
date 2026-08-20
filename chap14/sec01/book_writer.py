@@ -6,6 +6,7 @@ from langchain_core.output_parsers.string import StrOutputParser
 from typing_extensions import TypedDict
 from typing import List
 from utils import save_state, get_outline, save_outline
+from models import Task
 from datetime import datetime
 import os
 import dotenv
@@ -46,6 +47,51 @@ llm = ChatGoogleGenerativeAI(
 class State(TypedDict):
 
     messages: List[AnyMessage | str]
+    task_history: List[Task]
+
+
+def supervisor(state: State):
+    print("\n============ SUPERVISOR ============")
+
+    supervisor_system_prompt = PromptTemplate.from_template(
+        """
+    너는 AI 팀의 supervisor로서 AI 팀의 작업을 관리하고 지도한다.
+    사용자가 원하는 책을 써야 한다는 최종 목표를 염두에 두고,
+    사용자의 요구를 달성하기 위해 현재 해야 할 일이 무엇인지 결정한다.
+
+    supervisor가 활용할 수 있는 agent는 다음과 같다.
+    - content_strategist: 사용자의 요구 사항이 명확해졌을 때 사용한다. AI 팀의 콘텐츠 전략을 결정하고, 전체 책의 목차(outline)를 작성한다.
+    - communicator: AI 탐에서 해야 할 일을 스스로 판단할 수 없을 때 사용한다.
+
+    아래 내용을 고려하여, 현재 해야할 일이 무엇인지, 사용할 수 있는 agent를 단답으로 말하라.
+    
+    -----------------------------------------------
+    previous_outline: {outline}
+    -----------------------------------------------
+    messages:
+    {messages}
+    """
+    )
+
+    supervisor_chain = supervisor_system_prompt | llm.with_structured_output(Task)
+
+    messages = state.get("messages", [])
+
+    inputs = {"messages": messages, "outline": get_outline(current_path)}
+
+    task = supervisor_chain.invoke(inputs)
+    task_history = state.get("task_history", [])
+    task_history.append(task)
+
+    supervisor_message = AIMessage(f"[Supervisor] {task}")
+    messages.append(supervisor_message)
+    print(supervisor_message.content)
+    return {"messages": messages, "task_history": task_history}
+
+
+def supervisor_router(state: State):
+    task = state["task_history"][-1]  # 가장 최신 것
+    return task.agent
 
 
 def content_strategist(state: State):
@@ -160,15 +206,23 @@ graph_builder = StateGraph(State)
 
 # 노드 추가
 
-
+graph_builder.add_node("supervisor", supervisor)
 graph_builder.add_node("communicator", communicator)
 graph_builder.add_node("content_strategist", content_strategist)
 
 
 # 간선(Edge) 추가
+graph_builder.add_edge(START, "supervisor")
+graph_builder.add_conditional_edges(
+    "supervisor",
+    supervisor_router,
+    {
+        "content_strategist": "content_strategist",
+        "communicator": "communicator",
+    },
+)
 
 
-graph_builder.add_edge(START, "content_strategist")
 graph_builder.add_edge("content_strategist", "communicator")
 graph_builder.add_edge("communicator", END)
 
@@ -209,7 +263,8 @@ state = State(
         현재 시각은 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}이다.
         """
         )
-    ]
+    ],
+    task="",
 )
 
 
