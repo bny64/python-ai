@@ -17,6 +17,9 @@ def save_state(current_path, state):
     # 메시지 객체에서 클래스 이름과 텍스트 콘텐츠만 추출하여 튜플 목록으로 변환합니다.
     messages = [(m.__class__.__name__, m.content) for m in state["messages"]]
     state_dict["messages"] = messages
+    state_dict["task_history"] = [
+        task.to_dict() for task in state.get("task_history", [])
+    ]
 
     # JSON 파일로 상태를 기록합니다.
     with open(f"{current_path}/data/state.json", "w", encoding="utf-8") as f:
@@ -58,4 +61,3 @@ def save_outline(current_path, outline):
     with open(f"{current_path}/data/outline.md", "w", encoding="utf-8") as f:
         f.write(outline)
     return outline
-

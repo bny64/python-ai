@@ -138,7 +138,24 @@ def content_strategist(state: State):
     print(content_strategist_message)
     messages.append(AIMessage(content_strategist_message))
 
-    return {"messages": messages}
+    task_history = state.get("task_history", [])
+    if task_history[-1].agent != "content_strategist":
+        raise ValueError(
+            f"Content Strategist가 아닌 agent가 목차 작성을 시도하고 있습니다.\n {task_history[-1]}"
+        )
+
+    task_history[-1].done = True
+    task_history[-1].done_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    new_task = Task(
+        agent="communicator",
+        done=False,
+        description="AI 팀의 진행 상황을 사용자에게 보고하고, 사용자의 의견을 파악하기 위해 대화를 나눈다.",
+        done_at="",
+    )
+    task_history.append(new_task)
+
+    return {"messages": messages, "task_history": task_history}
 
 
 # 사용자와 대화할 노드(agent): communicator
@@ -159,7 +176,10 @@ def communicator(state: State):
 
     사용자도 outline(목차)을 이미 보고 있으므로, 다시 출력할 필요는 없다.
 
+    outline: {outline}
+    -----------------------------------------------
     messages: {messages}
+    -----------------------------------------------
     """
     )
 
@@ -171,7 +191,7 @@ def communicator(state: State):
 
     # 입력값 정의
 
-    inputs = {"messages": messages}
+    inputs = {"messages": messages, "outline": get_outline(current_path)}
 
     gathered = None
 
@@ -195,7 +215,16 @@ def communicator(state: State):
 
     messages.append(gathered)
 
-    return {"messages": messages}
+    task_history = state.get("task_history", [])
+    if task_history[-1].agent != "communicator":
+        raise ValueError(
+            f"Content Strategist가 아닌 agent가 대화를 시도하고 있습니다.\n {task_history[-1]}"
+        )
+
+    task_history[-1].done = True
+    task_history[-1].done_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    return {"messages": messages, "task_history": task_history}
 
 
 # 상태 그래프 정의
@@ -264,7 +293,7 @@ state = State(
         """
         )
     ],
-    task="",
+    task_history=[],
 )
 
 
