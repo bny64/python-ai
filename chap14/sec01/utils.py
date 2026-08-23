@@ -21,6 +21,13 @@ def save_state(current_path, state):
         task.to_dict() for task in state.get("task_history", [])
     ]
 
+    # references
+    references = state.get("references", {"queries": [], "docs": []})
+    state_dict["references"] = {
+        "queries": references["queries"],
+        "docs": [doc.metadata for doc in references["docs"]],
+    }
+
     # JSON 파일로 상태를 기록합니다.
     with open(f"{current_path}/data/state.json", "w", encoding="utf-8") as f:
         json.dump(state_dict, f, indent=4, ensure_ascii=False)
@@ -61,3 +68,4 @@ def save_outline(current_path, outline):
     with open(f"{current_path}/data/outline.md", "w", encoding="utf-8") as f:
         f.write(outline)
     return outline
+

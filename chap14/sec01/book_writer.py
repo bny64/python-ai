@@ -10,7 +10,7 @@ from models import Task
 from datetime import datetime
 import os
 import dotenv
-
+from tools import retrieve
 
 # 현재 폴더 경로 찾기
 
@@ -48,6 +48,7 @@ class State(TypedDict):
 
     messages: List[AnyMessage | str]
     task_history: List[Task]
+    references: dict
 
 
 def supervisor(state: State):
@@ -62,6 +63,7 @@ def supervisor(state: State):
     supervisor가 활용할 수 있는 agent는 다음과 같다.
     - content_strategist: 사용자의 요구 사항이 명확해졌을 때 사용한다. AI 팀의 콘텐츠 전략을 결정하고, 전체 책의 목차(outline)를 작성한다.
     - communicator: AI 탐에서 해야 할 일을 스스로 판단할 수 없을 때 사용한다.
+    - vector_search_agent: 벡터 DB 검색을 통해 목차(outline) 작성에 필요한 정보를 확보한다.
 
     아래 내용을 고려하여, 현재 해야할 일이 무엇인지, 사용할 수 있는 agent를 단답으로 말하라.
     
@@ -92,6 +94,104 @@ def supervisor(state: State):
 def supervisor_router(state: State):
     task = state["task_history"][-1]  # 가장 최신 것
     return task.agent
+
+
+def vector_search_agent(state: State):
+    print("\n\n============ VECTOR SEARCH AGENT ============")
+
+    tasks = state.get("task_history", [])
+    task = tasks[-1]
+
+    if task.agent != "vector_search_agent":
+        raise ValueError(
+            f"Vector Search Agent가 아닌 agent가 Vector Search Agent를 시도하고 있습니다.\n {task}"
+        )
+
+    vector_search_system_prompt = PromptTemplate.from_template(
+        """
+    너는 다른 AI Agent 들이 수행한 작업을 바탕으로,
+    목차(outline) 작성에 필요한 정보를 벡터 검색을 통해 찾아내는 Agent이다.
+
+    현재 목차(outline)를 작성하는 데 필요한 정보를 확보하기 위해,
+    다음 내용을 활용해 적절한 벡터 검색을 수행하라.
+
+    - 검색 목적: {mission}
+    -------------------------------
+    - 과거 검색 내용: {reference}
+    -------------------------------
+    - 이전 대화 내용: {messages}
+    -------------------------------
+    - 목차(outline): {outline}
+    """
+    )
+
+    mission = task.description
+    references = state.get("references", {"queries": [], "docs": []})
+    messages = state["messages"]
+    outline = get_outline(current_path)
+
+    inputs = {
+        "mission": mission,
+        "reference": references,
+        "messages": messages,
+        "outline": outline,
+    }
+
+    llm_with_retriever = llm.bind_tools([retrieve])
+    vector_search_chain = vector_search_system_prompt | llm_with_retriever
+
+    search_plans = vector_search_chain.invoke(inputs)
+
+    for tool_call in search_plans.tool_calls:
+        print("------------------------------------", tool_call)
+
+    args = tool_call["args"]
+
+    query = args["query"]
+    retrieved_docs = retrieve.invoke(args)
+
+    references["queries"].append(query)
+    references["docs"] += retrieved_docs
+
+    unique_docs = []
+    unique_page_contents = set()
+
+    for doc in references["docs"]:
+        if doc.page_content not in unique_page_contents:
+            unique_docs.append(doc)
+            unique_page_contents.add(doc.page_content)
+
+    references["docs"] = unique_docs
+
+    print("Queries:-----------------------")
+    queries = references["queries"]
+    for query in queries:
+        print(query)
+
+    print("References:-----------------------")
+    for doc in references["docs"]:
+        print(doc.page_content[:100])
+        print("---------------------------")
+
+    tasks[-1].done = True
+    tasks[-1].done_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    new_task = Task(
+        agent="communicator",
+        done=False,
+        description="AI팀의 진행상황을 사용자에게 보고하고, 사용자의 의견을 파악하기 위한 대화를 나눈다.",
+        done_at="",
+    )
+
+    tasks.append(new_task)
+
+    msg_str = f"[VECTOR SEARCH AGENT] 다음 질문에 대한 검색 완료: {queries}"
+    message = AIMessage(msg_str)
+    print(msg_str)
+
+    messages.append(message)
+
+    return {"messages": messages, "task_history": tasks, "references": references}
 
 
 def content_strategist(state: State):
@@ -238,6 +338,7 @@ graph_builder = StateGraph(State)
 graph_builder.add_node("supervisor", supervisor)
 graph_builder.add_node("communicator", communicator)
 graph_builder.add_node("content_strategist", content_strategist)
+graph_builder.add_node("vector_search_agent", vector_search_agent)
 
 
 # 간선(Edge) 추가
@@ -248,11 +349,12 @@ graph_builder.add_conditional_edges(
     {
         "content_strategist": "content_strategist",
         "communicator": "communicator",
+        "vector_search_agent": "vector_search_agent",
     },
 )
 
-
 graph_builder.add_edge("content_strategist", "communicator")
+graph_builder.add_edge("vector_search_agent", "communicator")
 graph_builder.add_edge("communicator", END)
 
 
