@@ -126,6 +126,8 @@ def documents_to_chroma(documents, chunk_size=1000, chunk_overlap=100):
             vectorstore.add_documents(batch)
             if i + batch_size < len(splits):
                 time.sleep(60)
+        print("새로운 문서 추가가 완료되었습니다. 한도 제한(Rate Limit)을 피하기 위해 1분간 대기합니다...")
+        time.sleep(60)
     else:
         print("No new urls to process")
 

@@ -3,7 +3,9 @@ from typing import Literal
 
 
 class Task(BaseModel):
-    agent: Literal["content_strategist", "communicator", "vector_search_agent"] = Field(
+    agent: Literal[
+        "content_strategist", "communicator", "vector_search_agent", "web_search_agent"
+    ] = Field(
         ...,
         description="""
   너는 책을 쓰는 AI 팀의 supervisor로서 AI 팀의 작업을 관리하고 지도한다.
