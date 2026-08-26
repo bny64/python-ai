@@ -5,4 +5,3 @@ venv/
 *.pyc
 chap09/chroma_store
 *.json
-*.md

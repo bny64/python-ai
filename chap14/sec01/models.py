@@ -8,10 +8,12 @@ class Task(BaseModel):
     ] = Field(
         ...,
         description="""
-  너는 책을 쓰는 AI 팀의 supervisor로서 AI 팀의 작업을 관리하고 지도한다.
-  사용자가 원하는 책을 써야 한다는 최종 목표를 염두에 두고,
-  사용자의 요구를 달성하기 위해 현재 해야 할 일이 무엇인지 결정한다.
-  """,
+        작업을 수행하는 agent의 종류.
+        - content_strategist: 콘텐츠 전략을 수립하는 작업을 수행한다. 사용자의 요구 사항이 명확해졌을 때 사용한다. AI 팀의 콘텐츠 전략을 결정하고, 전체 책의 목차(outline)를 작성한다.
+        - communicator: AI 팀에서 해야 할 일을 스스로 판단할 수 없을 때 사용한다. 사용자에게 진행 상황을 보고하고, 다음 지시를 물어본다.
+        - web_search_agent: 웹 검색으로 목차(outline) 작성에 필요한 정보를 확보한다.
+        - vector_search_agent: 벡터 DB 검색으로 목차(outline) 작성에 필요한 정보를 확보한다.
+        """,
     )
 
     done: bool = Field(..., description="종료 여부")
